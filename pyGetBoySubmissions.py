@@ -1,9 +1,21 @@
 import datetime
 import json
+import multiprocessing
 import os
+from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
 
 import bs4
 import requests
+from selenium import webdriver
+
+
+#THIS IS A STEP BY STEP PROGRAM :)
+#TODO: for future use, consider:
+#TODO: 1. getting data via selenium only (Don't use requests at all, since selenium has to be used for dynamicaly created content anyway. So html is available anyway...)
+#TODO: 2. get all data - images and text - in one batch
+
 
 
 def get_entries_on_pages():
@@ -42,8 +54,8 @@ def get_all_entries_id_and_write_to_file():
 # get_all_entries_id_and_write_to_file()
 
 
-def get_entry_data(id:str):
-    boy_page_url = "https://boyawards.secure-platform.com/a/gallery/rounds/12/details/" + id
+def get_entry_data(entry_id:str):
+    boy_page_url = "https://boyawards.secure-platform.com/a/gallery/rounds/12/details/" + entry_id
     r = requests.get(boy_page_url)
 
     s = bs4.BeautifulSoup(r.text, "html.parser")
@@ -58,7 +70,7 @@ def get_entry_data(id:str):
     video_url = gallery_info.find("a", {"id": "video-link"}).get("href")
 
     return {"boy_page_url": boy_page_url,
-            "id": id,
+            "id": entry_id,
             "product_name": product_name,
             "category": category,
             "company_name": company_name,
@@ -66,10 +78,6 @@ def get_entry_data(id:str):
             "description_html": description_html,
             "video_url": video_url}
 
-    # print(description_html)
-
-
-# print(get_entry_data("8648"))
 
 def for_each_entry_id_write_data_to_file():
 
@@ -86,7 +94,45 @@ def for_each_entry_id_write_data_to_file():
     print(datetime.datetime.now() - start)
 
 
-for_each_entry_id_write_data_to_file()
+# for_each_entry_id_write_data_to_file()
+
+
+def save_entry_pictures(driver: webdriver, entry_id: str):
+    boy_page_url = "https://boyawards.secure-platform.com/a/gallery/rounds/12/details/" + entry_id
+    driver.get(boy_page_url)
+
+    li_webelements = driver.find_element_by_class_name("slides").find_elements_by_tag_name("li")
+    for i, li in enumerate(li_webelements):
+        url = li.find_element_by_tag_name("a").get_attribute("href")
+        ext = Path(urlparse(url).path).suffix
+        path = "./images/" + entry_id + "/"
+        Path(path).mkdir(parents=True, exist_ok=True)
+        urlretrieve(url, (path + str(i+1) + ext))
+
+    with open("log.txt", "a") as f:
+        f.writelines(" ".join([entry_id, "got", str(len(li_webelements)), "images"])+"\n")
+
+
+def for_each_entry_id_get_images():
+    f = open("entry_ids.txt", "r")
+    ids = [entry_id.rstrip() for entry_id in f.readlines()]
+    f.close()
+
+    start = datetime.datetime.now()
+
+    driver = webdriver.Chrome(executable_path="./chromedriver.exe")
+
+    for entry_id in ids:
+        save_entry_pictures(driver, entry_id)
+
+    with open("log.txt", "a") as f:
+        now = str(datetime.datetime.now())
+        how_long = (str(datetime.datetime.now() - start))
+        f.writelines("  -->  ".join([now, how_long]) + "\n")
+
+
+# for_each_entry_id_get_images()
+
 
 
 
